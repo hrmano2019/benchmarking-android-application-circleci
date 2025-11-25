@@ -1,144 +1,65 @@
-version: 2.1
+name: React/TypeScript CI/CD
 
-orbs:
-  android: circleci/android@3.1.0
-  gcp-cli: circleci/gcp-cli@3.3.2
+# 1. Triggers the workflow on pushes to the main branch and pull requests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
+# 2. Define the jobs to be executed
 jobs:
-  unit-test:
-    executor:
-      name: android/android_docker
-      tag: 2025.03.1
+  build:
+    # Run the job on an Ubuntu environment
+    runs-on: ubuntu-latest
+    
+    # 3. Define the steps for the build job
     steps:
-      - checkout
-      - android/restore_gradle_cache
-      - android/run_tests:
-          test_command: ./gradlew testDebug
-      - android/save_gradle_cache
-      - run:
-          name: Save test results
-          command: |
-            mkdir -p ~/test-results/junit/
-            find . -type f -regex ".*/build/test-results/.*xml" -exec cp {} ~/test-results/junit/ \;
-          when: always
-      - store_test_results:
-          path: ~/test-results
-      - store_artifacts:
-          path: ~/test-results/junit
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Specify your project's Node version
+          cache: 'npm' # Use npm for caching dependencies
+          
+      - name: Install Dependencies
+        run: npm install
 
-  android-test:
-    parameters:
-      system-image:
-        type: string
-        default: system-images;android-35;google_apis;x86_64
-    executor:
-      name: android/android_machine
-      resource_class: large
-      tag: 2024.11.1
-    steps:
-      - checkout
-      - android/start_emulator_and_run_tests:
-          test_command: ./gradlew :app:connectedDebugAndroidTest
-          system_image: << parameters.system-image >>
-      - run:
-          name: Save test results
-          command: |
-            mkdir -p ~/test-results/junit/
-            find . -type f -regex ".*/build/outputs/androidTest-results/.*xml" -exec cp {} ~/test-results/junit/ \;
-          when: always
-      - store_test_results:
-          path: ~/test-results
-      - store_artifacts:
-          path: ~/test-results/junit
+      - name: Run Linting and Type Checking
+        # Assumes you have standard lint and type check scripts defined in package.json
+        run: |
+          npm run lint
+          npm run typecheck # This step catches the type error you mentioned initially
+          
+      - name: Build Production Bundle
+        # Assumes the build script generates production files (e.g., in a 'dist' or 'build' folder)
+        run: npm run build
+        
+      - name: Upload Artifacts (for subsequent deployment)
+        uses: actions/upload-artifact@v4
+        with:
+          name: inventory-app-build
+          path: dist # Change 'dist' to your actual build output folder (e.g., 'build', 'out')
 
-  benchmarks-ftl:
-    executor:
-      name: android/android_docker
-      tag: 2025.03.1-node
-    steps:
-      - checkout
-      - android/restore_gradle_cache
-      - run:
-          name: Build app and test app
-          command: ./gradlew app:assembleBenchmark macrobenchmark:assembleBenchmark
-      - gcp-cli/setup:
-          version: 404.0.0
-      - run:
-          name: run on FTL
-          command: |
-            gcloud firebase test android run \
-              --type instrumentation \
-              --app app/build/outputs/apk/benchmarkRelease/app-benchmarkRelease.apk \
-              --test macrobenchmark/build/outputs/apk/benchmarkRelease/macrobenchmark-benchmarkRelease.apk \
-              --device model=tokay,version=34,locale=en,orientation=portrait \
-              --timeout 45m \
-              --directories-to-pull /sdcard/Download \
-              --results-bucket gs://android-sample-benchmarks \
-              --results-dir macrobenchmark \
-              --environment-variables clearPackageData=true,additionalTestOutputDir=/sdcard/Download,no-isolated-storage=true
-      - run:
-          name: Download benchmark data
-          command: |
-            mkdir ~/benchmarks
-            gsutil cp -r 'gs://android-sample-benchmarks/macrobenchmark/**/artifacts/sdcard/Download/*'  ~/benchmarks
-            gsutil rm -r gs://android-sample-benchmarks/macrobenchmark
-      - store_artifacts:
-          path: ~/benchmarks
-      - run:
-          name: Evaluate benchmark results
-          command: node scripts/eval_startup_benchmark_output.js
-
-  release-build:
-    executor:
-      name: android/android_docker
-      tag: 2025.03.1
-    steps:
-      - checkout
-      - android/restore_gradle_cache
-      - run:
-          name: Assemble release build
-          command: |
-            ./gradlew assembleRelease
-      - store_artifacts:
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
-
-workflows:
-  test-and-build:
-    jobs:
-      - unit-test
-      - android/run_ui_tests:
-          executor:
-            name: android/android_machine
-            resource_class: large
-            tag: 2024.11.1
-          filters:
-            branches:
-              ignore: main # regular commits
-      - android-test:
-          matrix:
-            alias: android-test-all
-            parameters:
-              system-image:
-                - system-images;android-35;google_apis;x86_64
-                - system-images;android-33;google_apis;x86_64
-                - system-images;android-32;google_apis;x86_64
-                - system-images;android-30;google_apis;x86
-                - system-images;android-29;google_apis;x86
-          name: android-test-<<matrix.system-image>>
-          filters:
-            branches:
-              only: main # Commits to main branch
-      - benchmarks-ftl:
-          requires:
-            - unit-test
-          filters:
-            branches:
-              only: main # Run benchmarks only on main branch
-      - release-build:
-          requires:
-            - unit-test
-            - android-test-all
-            - benchmarks-ftl
-          filters:
-            branches:
-              only: main # Commits to main branch
+  # Optional: Deployment job (Example: Deploying to GitHub Pages)
+  # deploy:
+  #   needs: build
+  #   if: github.ref == 'refs/heads/main' # Only deploy after a successful merge/push to main
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Download Build Artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: inventory-app-build
+  #         path: build
+          
+  #     - name: Deploy to GitHub Pages
+  #       uses: peaceiris/actions-gh-pages@v4
+  #       with:
+  #         github_token: ${{ secrets.GITHUB_TOKEN }}
+  #         publish_dir: ./build # Use the downloaded build folder
