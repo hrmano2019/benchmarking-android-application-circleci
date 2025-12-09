@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Détails de la voiture</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #galerie_images img { max-width: 300px; margin: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <div id="contenu">
+        <p>Chargement des données...</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const id_voiture = params.get('id');
+
+            if (id_voiture) {
+                fetch(api/fiche_produit.php?id=${id_voiture})
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Voiture non trouvée.');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        const contenuDiv = document.getElementById('contenu');
+                        contenuDiv.innerHTML = ''; // Vide le contenu de chargement
+
+                        if (data.success) {
+                            const voiture = data.data;
+
+                            // Génère le HTML pour les détails
+                            const detailsHtml = `
+                                <h1>${voiture.marque} ${voiture.modele}</h1>
+                                <p><strong>Année :</strong> ${voiture.annee}</p>
+                                <p><strong>Prix :</strong> ${voiture.prix} €</p>
+                                <h3>Caractéristiques</h3>
+                                <p>${voiture.caracteristiques}</p>
+                                <h3>Images</h3>
+                                <div id="galerie_images"></div>
+                            `;
+                            contenuDiv.innerHTML = detailsHtml;
+
+                            // Affiche les images
+                            const galerieImages = document.getElementById('galerie_images');
+                            voiture.images.forEach(image_url => {
+                                const img = document.createElement('img');
+                                img.src = image_url;
+                                img.alt = ${voiture.marque} ${voiture.modele};
+                                galerieImages.appendChild(img);
+                            });
+                        } else {
+                            contenuDiv.innerHTML = <p>${data.message}</p>;
+                        }
+                    })
+                    .catch(error => {
+                        document.getElementById('contenu').innerHTML = <p>${error.message}</p>;
+                    });
+            } else {
+                document.getElementById('contenu').innerHTML = '<p>Veuillez spécifier un identifiant de voiture.</p>';
+            }
+        });
+    </script>
+</body>
+</html>
