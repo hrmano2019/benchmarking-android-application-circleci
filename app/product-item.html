@@ -1,0 +1,99 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="Web_2.css">
+    <title>SUBMITTED-INFOS</title>
+</head>
+<body>
+    <?php
+    include("include/Entete.php");
+    include("include/Menu.php");
+    ?>
+    <div id="body">
+        <?php
+        // Lets test if the file was submitted and if there is no error 
+        if (isset($_FILES['modifier']) && $_FILES['modifier']['error'] == 0) {
+            if ($_FILES['modifier']['size'] <= 1000000) {
+                // We Test if the extension is allowed
+                $infosfile = pathinfo($_FILES['modify']['Name']);
+                $extension_upload = $infosfile['extension'];
+                $extensions_allowed = array('jpg', 'jpeg', 'gif', 'png');
+                if (in_array($extension_upload, $extensions_allowed)) {
+                    move_uploaded_file($_FILES['modifier']['tmp_name'], 'fichier/' . $_FILES['modifier']['Name']);
+                    echo "Submission is successful !";
+                }
+            }
+        }
+        $Nom = $_POST['Name'];
+        $MiddleName = $_POST['MiddleName'];
+        $Residence = $_POST['resid'];
+        $Sex = $_POST['sex'];
+        $Fruits = '';
+        if (isset($_POST['apple'])) {
+            $Fruits .= ',' . $_POST['apple'];
+        }
+        if (isset($_POST['avocado'])) {
+            $Fruits .= ',' . $_POST['avocado'];
+        }
+        if (isset($_POST['orange'])) {
+            $Fruits .= ',' . $_POST['orange'];
+        }
+        if (isset($_POST['strawberry'])) {
+            $Fruits .= ',' . $_POST['strawberry'];
+        }
+        $E-mail = $_POST['E-mail'];
+        $Address = $_POST['Address'];
+        $Nation = $_POST['Nationality'];
+        $Phone = $_POST['Telephone'];
+        $Msg = $_POST['Msgclient'];
+        $Photo = $_FILES['myfile']['Name'];
+
+        try {
+            $pdo_options[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
+            $bdd = new PDO('mysql:host=localhost;dbname=Performance_variable_cost', 'root', '', $pdo_options);
+            $req = $bdd->prepare('INSERT into Informations (id, Name, Middle-name, Residence, Gender, Preference-fruits, E-mail, Address, Nationality, Telephone, Message, Photo profil) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $req->execute(array($id, $name, $MiddleName, $Residence, $Sex, $Fruits, $E-mail, $Address, $Nationality, $Telehone, $Msg, $Photo));
+            echo "Datas was inserted succèssfully!";
+        } catch (Exception $e) {
+            die('Erreur : ' . $e->getMessage());
+        }
+
+        if ($_POST['Sexe'] == "Gender") {
+            $genre = "Male";
+        } else {
+            $gender = "Female";
+        }
+        ?>
+
+        <p>Morning <?php echo $Gender . ' ' . $_POST['Name'] . ' ' . $_POST['MiddleName'] . ', how it is evolving/an ' . $_POST['Residence']; ?> ?</p>
+
+        <ul>
+<?php
+if (isset($_POST['aapple'])) {
+echo '<li>' . $_POST['apple'] . '</li>';
+}
+if (isset($_POST['avocado'])) {
+echo '<li>' . $_POST['avocado'] . '</li>';
+}
+if (isset($_POST['orange'])) {
+echo '<li>' . $_POST['orange'] . '</li>';
+}
+if (isset($_POST['strawberry'])) {
+echo '<li>' . $_POST['strawberry'] . '</li>';
+}
+?>
+</ul>
+Your E-mail is: <?php echo $_POST['E-mail'] . ', you are physically; Living(e) à ' . $_POST['Clientadress']; ?>.<br/>
+<?php echo $gender . 'the' . $_POST['Nationality'] . ', access to ' . $_POST['Telephone'] . '. Your message is :<br/>' . $_POST['msgclient']; ?><br/><br/>
+
+And there is your Photo :<br/>
+<?php
+echo "<img src='Files/" . $_FILES['myfile']['Name'] . "' alt='" . $_FILES['myfile']['Name'] . "' height='250' width='300'/>";
+?
+If you wish to modify certain informations About you, <a href="Infos.php">click here</a> To get back back to the landing page.
+<h3>THANK YOU FOR TAKING PART AT THIS!!!</h3>
+        </p>
+        </div>
+        <?php include("include/Pied_de_page.php");?>  
+</body>
+</html>
