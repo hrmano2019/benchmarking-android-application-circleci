@@ -1,65 +1,127 @@
-name: React/TypeScript CI/CD
+# Version 2.1 is recommended for workflows and advanced features
+version: 2.1
 
-# 1. Triggers the workflow on pushes to the main branch and pull requests
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+#####################################################################
+# 1. Dynamic Resource Allocation (Executors)
+# Define different resource classes to match job requirements (cost optimization)
+#####################################################################
+executors:
+  # Executor for fast, non-compile tasks (linting, configuration checks)
+  fast_executor:
+    docker:
+      # Use a lightweight Android image
+      - image: cimg/android:2023.10
+    resource_class: small # Uses minimal CPU/RAM resources
 
-# 2. Define the jobs to be executed
+  # Executor for standard build and unit testing
+  standard_executor:
+    docker:
+      - image: cimg/android:2023.10
+    resource_class: medium # Standard resources for compilation
+
+  # Executor for heavy, long-running performance benchmarks or UI tests
+  heavy_executor:
+    docker:
+      - image: cimg/android:2023.10
+    resource_class: large # Use high-performance resources for deep analysis
+
+#####################################################################
+# 2. Jobs (Steps and Caching)
+#####################################################################
 jobs:
-  build:
-    # Run the job on an Ubuntu environment
-    runs-on: ubuntu-latest
-    
-    # 3. Define the steps for the build job
+  # --- 2.1 Lightweight Job ---
+  android_lint:
+    executor: fast_executor
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        
-      - name: Set up Node.js Environment
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20' # Specify your project's Node version
-          cache: 'npm' # Use npm for caching dependencies
-          
-      - name: Install Dependencies
-        run: npm install
+      - checkout
+      - run:
+          name: Run Android Lint
+          command: ./gradlew lintDebug
+      - store_artifacts:
+          path: app/build/reports/lint-results-debug.xml
 
-      - name: Run Linting and Type Checking
-        # Assumes you have standard lint and type check scripts defined in package.json
-        run: |
-          npm run lint
-          npm run typecheck # This step catches the type error you mentioned initially
-          
-      - name: Build Production Bundle
-        # Assumes the build script generates production files (e.g., in a 'dist' or 'build' folder)
-        run: npm run build
-        
-      - name: Upload Artifacts (for subsequent deployment)
-        uses: actions/upload-artifact@v4
-        with:
-          name: inventory-app-build
-          path: dist # Change 'dist' to your actual build output folder (e.g., 'build', 'out')
+  # --- 2.2 Standard Job with Parallelization and Caching ---
+  android_unit_tests:
+    executor: standard_executor
+    # Intelligent Test Selection: Split tests across multiple containers for faster execution
+    parallelism: 3
+    steps:
+      - checkout
 
-  # Optional: Deployment job (Example: Deploying to GitHub Pages)
-  # deploy:
-  #   needs: build
-  #   if: github.ref == 'refs/heads/main' # Only deploy after a successful merge/push to main
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Download Build Artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: inventory-app-build
-  #         path: build
-          
-  #     - name: Deploy to GitHub Pages
-  #       uses: peaceiris/actions-gh-pages@v4
-  #       with:
-  #         github_token: ${{ secrets.GITHUB_TOKEN }}
-  #         publish_dir: ./build # Use the downloaded build folder
+      # Smart Caching: Restore dependencies based on content hash of build files
+      - restore_cache:
+          keys:
+            # Key 1: Specific cache for the current build files
+            - gradle-cache-v1-{{ checksum "build.gradle" }}-{{ checksum "app/build.gradle" }}
+            # Key 2: Fallback to the latest general cache
+            - gradle-cache-v1-
+
+      # Fetch dependencies (will only download if cache restore failed)
+      - run:
+          name: Fetch Dependencies
+          command: ./gradlew androidDependencies
+
+      # Smart Caching: Save the fetched dependencies for future builds
+      - save_cache:
+          paths:
+            - ~/.gradle/caches
+            - ~/.gradle/wrapper
+          key: gradle-cache-v1-{{ checksum "build.gradle" }}-{{ checksum "app/build.gradle" }}
+
+      # Run tests in parallel chunks
+      - run:
+          name: Run Unit Tests with Dynamic Splitting
+          command: |
+            # CircleCI utility dynamically splits discovered test files across the 3 parallel containers
+            TEST_FILES=$(circleci tests glob "**/src/test/**/*.kt" "**/src/test/**/*.java" | circleci tests split --split-by=timings --times-property="classname")
+            ./gradlew testDebugUnitTest --tests "$TEST_FILES"
+
+  # --- 2.3 Heavy Benchmarking Job ---
+  android_performance_benchmark:
+    executor: heavy_executor
+    steps:
+      - checkout
+      - run:
+          name: Run Deep Performance Tests
+          # Assumes a Gradle task for running intensive benchmarks (e.g., Macrobenchmarks)
+          command: ./gradlew measurePerformanceDebug
+      - run:
+          name: Log Benchmarks to Service
+          # Dynamic Optimization: Push results to an external monitoring system (e.g., InfluxDB)
+          command: |
+            echo "Uploading benchmark data..."
+            # Example: curl -X POST -d @./app/build/perf/results.json $METRICS_API_ENDPOINT
+      - store_artifacts:
+          path: app/build/perf
+
+#####################################################################
+# 3. Dynamic Workflows (Branch-Based Workflow Selection)
+#####################################################################
+workflows:
+  # Workflow 1: Lightweight and fast feedback for ALL feature branches
+  feature_workflow:
+    jobs:
+      - android_lint
+      - android_unit_tests
+    # Dynamic Triggering: Only run this workflow on branches other than 'main'
+    unless:
+      branches:
+        only:
+          - main
+          - master # Include master if it's the stable branch name
+
+  # Workflow 2: Full suite including heavy benchmarking for the stable branch
+  main_workflow:
+    jobs:
+      - android_lint
+      - android_unit_tests
+      - android_performance_benchmark:
+          # Only run the heavy job if the unit tests pass
+          requires:
+            - android_unit_tests
+          # Dynamic Triggering: Ensure this job only runs on the main branch
+          filters:
+            branches:
+              only:
+                - main
+                - master
