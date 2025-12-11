@@ -1,0 +1,37 @@
+jobs:
+  # Job to create and cache the AVD snapshot
+  avd_pre_warm:
+    executor: standard_executor
+    steps:
+      - checkout
+      - restore_cache:
+          key: avd-snapshot-api-33-v1
+      
+      # 1. Boot and install (only runs if cache misses)
+      - run:
+          name: Create AVD and Install Baseline App
+          command: |
+            # Create a clean AVD (Android Virtual Device)
+            echo "no" | avdmanager create avd -n test_avd -k "system-images;android-33;google_apis;x86_64"
+            # Launch AVD and wait for it to be ready
+            $ANDROID_HOME/emulator/emulator -avd test_avd -no-window -no-audio &
+            adb wait-for-device
+            # Install a minimal app or core dependencies
+
+      # 2. Snapshot the state for quick restoration
+      - run:
+          name: Take AVD Snapshot
+          command: |
+            # Use adb commands or similar to explicitly take a snapshot
+            adb emu avd snapshot save pre_warmed_state
+            adb emu kill
+
+      # 3. Cache the AVD directory
+      - save_cache:
+          paths:
+            - ~/.android/avd/
+          key: avd-snapshot-api-33-v1
+
+# In the subsequent test jobs:
+# - restore_cache: use the same key to pull the pre_warmed_state
+# - run: $ANDROID_HOME/emulator/emulator -avd test_avd -snapshot pre_warmed_state -no-window -no-audio &
