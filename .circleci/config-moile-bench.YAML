@@ -1,4 +1,8 @@
 jobs:
+ - run:
+         name: 📱 Benchmark Android/iOS Apps
+         command: node benchmark-optimization.js
+
   # --- Heavy Benchmarking Job (Modified) ---
   android_performance_benchmark:
     executor: heavy_executor
@@ -42,7 +46,8 @@ jobs:
             # Send the metrics to your monitoring tool's API endpoint
             echo "Uploading metrics to monitoring dashboard..."
             curl -X POST $METRICS_API_ENDPOINT \
-                 -H "Content-Type: application/json" \
+     
+                -H "Content-Type: application/json" \
                  --data "{\"branch\": \"$CURRENT_BRANCH\", \"commit\": \"$COMMIT_SHA\", \"startup_ms\": $STARTUP_TIME, \"jank_frames\": $JANK_FRAMES}"
 
       - store_artifacts:
