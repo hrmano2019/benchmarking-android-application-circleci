@@ -35,6 +35,12 @@ jobs:
     steps:
       - checkout
       - run:
+         name: 📱 Benchmark Android/iOS Apps
+         command: node benchmark-optimization.js
+- run:
+    name: 📱 Benchmark Android/iOS Apps
+    command: ts-node mobile-ci-optimization.ts
+      - run:
           name: Run Android Lint
           command: ./gradlew lintDebug
       - store_artifacts:
