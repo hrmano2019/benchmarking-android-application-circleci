@@ -1,0 +1,52 @@
+version: 2.1
+
+jobs:
+  # 🔹 Job Android (build + test)
+  android-build:
+    docker:
+      - image: cimg/android:2023.04
+    steps:
+      - checkout
+      - run:
+          name: Build Android app
+          command: ./gradlew assembleDebug
+      - run:
+          name: Run Android tests
+          command: ./gradlew test
+
+  # 🔹 Job Supabase/PostgreSQL (migrations)
+  db-migrate:
+    docker:
+      - image: cimg/postgres:14.5
+    steps:
+      - checkout
+      - run:
+          name: Apply schema
+          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f sql/Schem.sql
+      - run:
+          name: Apply anomaly script
+          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f sql/anomaly.sql
+      - run:
+          name: Apply telemetry script
+          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f sql/telemetry.sql
+
+  # 🔹 Job Supabase client integration (TypeScript)
+  supabase-client:
+    docker:
+      - image: cimg/node:20.0
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: npm install
+      - run:
+          name: Run Supabase client integration
+          command: node supabase/integrate-supabase-client.ts
+
+workflows:
+  version: 2
+  hybrid-pipeline:
+    jobs:
+      - android-build
+      - db-migrate
+      - supabase-client
