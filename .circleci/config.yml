@@ -5,6 +5,7 @@ jobs:
   android-build:
     docker:
       - image: cimg/android:2023.04
+    working_directory: ~/project/android
     steps:
       - checkout
       - run:
@@ -18,30 +19,35 @@ jobs:
   db-migrate:
     docker:
       - image: cimg/postgres:14.5
+    working_directory: ~/project/sql
     steps:
       - checkout
       - run:
           name: Apply schema
-          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f sql/Schem.sql
+          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f Schem.sql
       - run:
           name: Apply anomaly script
-          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f sql/anomaly.sql
+          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f anomaly.sql
       - run:
           name: Apply telemetry script
-          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f sql/telemetry.sql
+          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f telemetry.sql
 
-  # 🔹 Job Supabase client integration (TypeScript)
+  # 🔹 Job Supabase client integration (Node/TypeScript)
   supabase-client:
     docker:
       - image: cimg/node:20.0
+    working_directory: ~/project/frontend
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: npm install
       - run:
+          name: Build TypeScript
+          command: npm run build
+      - run:
           name: Run Supabase client integration
-          command: node supabase/integrate-supabase-client.ts
+          command: node dist/integrate-supabase-client.js
 
 workflows:
   version: 2
