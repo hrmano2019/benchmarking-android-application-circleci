@@ -1,0 +1,29 @@
+{
+  "name": "supabase-client-sync",
+  "version": "1.0.0",
+  "description": "Node + Supabase client integration for CircleCI hybrid pipeline",
+  "main": "integrate-supabase-client.ts",
+  "scripts": {
+    "start": "node dist/integrate-supabase-client.js",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "vue": "^3.4.0",
+    "supabase-js": "^2.39.0",
+    "pg": "^8.11.0",
+    "dotenv": "^16.3.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.2",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.3",
+    "@types/node": "^20.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
