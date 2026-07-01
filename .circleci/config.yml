@@ -55,4 +55,6 @@ workflows:
     jobs:
       - android-build
       - db-migrate
-      - supabase-client
+      - supabase-client:
+          requires:
+            - db-migrate
