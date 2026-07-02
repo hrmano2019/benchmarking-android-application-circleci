@@ -1,21 +1,20 @@
 version: 2.1
 
 jobs:
-  # 🔹 Job Android (build + test)
-  android-build:
+  # --- Benchmark Node/TS Scripts ---
+  benchmark-node:
     docker:
-      - image: cimg/android:2023.04
-    working_directory: ~/project/android
+      - image: cimg/node:20.0
     steps:
       - checkout
       - run:
-          name: Build Android app
-          command: ./gradlew assembleDebug
+          name: 📱 Benchmark Android/iOS Apps (JS)
+          command: node benchmark-optimization.js
       - run:
-          name: Run Android tests
-          command: ./gradlew test
+          name: 📱 Benchmark Android/iOS Apps (TS)
+          command: ts-node mobile-ci-optimization.ts
 
-  # 🔹 Job Supabase/PostgreSQL (migrations)
+  # --- Supabase/Postgres Migrations ---
   db-migrate:
     docker:
       - image: cimg/postgres:14.5
@@ -24,7 +23,7 @@ jobs:
       - checkout
       - run:
           name: Apply schema
-          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f Schem.sql
+          command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f Schema.sql
       - run:
           name: Apply anomaly script
           command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f anomaly.sql
@@ -32,29 +31,49 @@ jobs:
           name: Apply telemetry script
           command: psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f telemetry.sql
 
-  # 🔹 Job Supabase client integration (Node/TypeScript)
-  supabase-client:
+  # --- Heavy Benchmarking Job (Android) ---
+  android_performance_benchmark:
     docker:
-      - image: cimg/node:20.0
-    working_directory: ~/project/frontend
+      - image: cimg/android:2023.04
     steps:
       - checkout
+      # STEP 1: Execute the Performance Tests
       - run:
-          name: Install dependencies
-          command: npm install
+          name: Run Deep Performance Tests and Collect Data
+          command: ./gradlew measurePerformanceDebug
+      # STEP 2: Analyze and Upload Metrics
       - run:
-          name: Build TypeScript
-          command: npm run build
-      - run:
-          name: Run Supabase client integration
-          command: node dist/integrate-supabase-client.js
+          name: Analyze and Upload Performance Metrics
+          command: |
+            PERF_DATA_FILE="app/build/perf/benchmark_results.json"
+            STARTUP_TIME=$(jq '.metrics.startup_time' $PERF_DATA_FILE)
+            JANK_FRAMES=$(jq '.metrics.jank_frames' $PERF_DATA_FILE)
+            CURRENT_BRANCH="${CIRCLE_BRANCH}"
+            COMMIT_SHA="${CIRCLE_SHA1}"
+
+            BASELINE_TIME=1500
+            THRESHOLD=1.10
+
+            if [ $(echo "$STARTUP_TIME > ($BASELINE_TIME * $THRESHOLD)" | bc -l) -eq 1 ]; then
+              echo "🚨 PERFORMANCE REGRESSION DETECTED!"
+              exit 1
+            else
+              echo "Performance within acceptable limits."
+            fi
+
+            echo "Uploading metrics to monitoring dashboard..."
+            curl -X POST $METRICS_API_ENDPOINT \
+              -H "Content-Type: application/json" \
+              --data "{\"branch\": \"$CURRENT_BRANCH\", \"commit\": \"$COMMIT_SHA\", \"startup_ms\": $STARTUP_TIME, \"jank_frames\": $JANK_FRAMES}"
+      - store_artifacts:
+          path: app/build/perf
 
 workflows:
   version: 2
   hybrid-pipeline:
     jobs:
-      - android-build
+      - benchmark-node
       - db-migrate
-      - supabase-client:
+      - android_performance_benchmark:
           requires:
             - db-migrate
